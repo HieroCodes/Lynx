@@ -1,0 +1,121 @@
+ <div class="demo-app-sidebar-section">
+                 <h2 class="header">Tous les Evenements ({{ currentEvents.length }})</h2>
+                 <ul>
+                     <li v-for="event in currentEvents" :key="event.id">
+                         <b>{{ event.startStr }}</b>
+                         <i>{{ event.title }}</i>
+                     </li>
+                 </ul>
+             </div>
+
+
+ export default defineComponent(
+    components: {
+        EventModal,
+        FullCalendar,
+    },
+    props: {
+        events: Array
+    },
+    data() {
+        return {
+            showModal: false,
+            selectedDate: null,
+            calendarOptions: {
+                //events: this.eventsToFullCalendar(this.events),
+                plugins: [
+                    dayGridPlugin,
+                    timeGridPlugin,
+                    interactionPlugin // needed for dateClick
+                ],
+                headerToolbar: {
+                    left: 'prev, today ,next',
+                    center: 'title',
+                    right: 'dayGridMonth, timeGridWeek, timeGridDay',
+
+                },
+                buttonText : {
+                    today: 'Aujourd\'hui',
+                        month: 'Mois',
+                        week : 'Semaine',
+                        day : 'Jour',
+                        list : 'Liste'
+
+                },
+
+                initialView: 'dayGridMonth',
+                initialEvents: INITIAL_EVENTS, // alternatively, use the `events` setting to fetch from a feed
+                editable: true,
+                selectable: true,
+                selectMirror: true,
+                dayMaxEvents: true,
+                weekends: true,
+                select: this.handleDateSelect,
+                eventClick: this.handleEventClick,
+                eventsSet: this.handleEvents
+                /* you can update a remote database when these fire:
+                eventAdd:
+                eventChange:
+                eventRemove:
+                */
+            },
+            currentEvents: [],
+        }
+    },
+    methods: {
+
+        eventsToFullCalendar(events) {
+            if (!events) return [];
+            return events.map(event => {
+                return {
+                    title: event.title,
+                    start: event.date
+                    // ... autres propriétés si nécessaire
+                };
+            });
+        },
+
+        handleWeekendsToggle() {
+            this.calendarOptions.weekends = !this.calendarOptions.weekends // update a property
+        },
+        handleDateSelect(selectInfo) {
+            console.log("Date sélectionnée:", selectInfo.startStr);
+            this.showModal = true;
+            this.selectedDate = selectInfo.startStr;
+
+        },
+
+        addEvent(event) {
+            // Ajoutez une logique pour sauvegarder l'événement en base de données si nécessaire.
+            this.calendarOptions.initialEvents.push(event);
+        },
+
+        // Méthode pour éditer un événement
+        editEvent(event) {
+            const newTitle = prompt('Modifiez le titre de l\'événement', event.title)
+            if (newTitle) {
+                event.title = newTitle
+            }
+        },
+
+        // Méthode pour supprimer un événement
+        /*deleteEvent(event) {
+            if (confirm(`Êtes-vous sûr de vouloir supprimer l'événement "${event.title}"`)) {
+                const index = this.calendarOptions.events.indexOf(event)
+                if (index !== -1) {
+                    this.calendarOptions.events.splice(index, 1)
+                }
+            }
+        }, */
+
+        handleEventClick(clickInfo) {
+            if (confirm(`Are you sure you want to delete the event '${clickInfo.event.title}'`)) {
+                clickInfo.event.remove()
+            }
+        },
+        handleEvents(events) {
+            this.currentEvents = events
+        },
+    },
+
+})

@@ -25,10 +25,19 @@ Route::get('/', function () {
     ]);
 });
 
-Route::resource(
-       'events',
-       EventController::class
-       );
+// routes POST
+Route::get('/events', [EventController::class, 'index']);
+Route::get('/events', [EventController::class, 'scope']);
+Route::post('/events', [EventController::class, 'store']);
+Route::post('/events/{id}', [EventController::class, 'update']);
+Route::delete('/events/{id}', [EventController::class, 'destroy']);
+
+
+
+
+
+
+
 
 Route::middleware([
     'auth:sanctum',
@@ -39,3 +48,14 @@ Route::middleware([
         return Inertia::render('Dashboard');
     })->name('dashboard');
 });
+
+Route::middleware([
+    'auth:sanctum',
+    config('jetstream.auth_session'),
+    'verified',
+])->group(function () {
+    Route::get('/filtres', function () {
+        return Inertia::render('Filtres');
+    })->name('filtres');
+});
+

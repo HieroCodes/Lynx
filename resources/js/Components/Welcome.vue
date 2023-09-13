@@ -1,92 +1,233 @@
 <template>
-    <div class='demo-app'>
-        <div class='demo-app-sidebar'>
-            <div class='demo-app-sidebar-section'>
-                <h2><b style="font-family: 'Gilroy ExtraBold';">Instructions</b></h2>
+    <div class="demo-app">
+        <div class="demo-app-sidebar">
+            <div class="demo-app-sidebar-section">
+                <h2 class="header"><b>Instructions</b></h2>
                 <ul>
-                    <li>Select dates and you will be prompted to create a new event</li>
-                    <li>Drag, drop, and resize events</li>
-                    <li>Click an event to delete it</li>
+                    <li><strong> + </strong>Selectionner une date pour créer un évènement</li>
+                    <li><strong> + </strong>Cliquez sur un évèement pour le modifier ou le supprimer</li>
+                    <li><strong> + </strong>Cliquez, puis clisser un évènement d'une date a une autre du Calendrier</li>
+                    <li><strong> + </strong>Filtrer les évènements par date dans le menu "Filtres"</li>
                 </ul>
             </div>
-            <div class='demo-app-sidebar-section'>
-                <label>
-                    <input
-                        type='checkbox'
-                        :checked='calendarOptions.weekends'
-                        @change='handleWeekendsToggle'
-                    />
-                    toggle weekends
-                </label>
-            </div>
-            <div class='demo-app-sidebar-section'>
-                <h2>Tous les Evenements ({{ currentEvents.length }})</h2>
+            <div class="demo-app-sidebar-section">
+                <h2 class="header">Liste des Evenements ({{ currentEvents.length }})</h2>
                 <ul>
-                    <li v-for='event in currentEvents' :key='event.id'>
+                    <li v-for="event in displayedEvents" :key="event.id">
                         <b>{{ event.startStr }}</b>
                         <i>{{ event.title }}</i>
                     </li>
                 </ul>
+                <button v-if="!showAllEvents && currentEvents.length > 9" @click="showAllEvents = true">Voir plus</button>
+                <button v-else-if="showAllEvents" @click="showAllEvents = false">Voir moins</button>
             </div>
-        </div>
 
-        <div class='demo-app-main'>
+        </div>
+        <div class="demo-app-main">
+
             <FullCalendar
-                class='demo-app-calendar'
-                :options='calendarOptions'>
-
-                <template v-slot:eventContent='arg'>
-                    <b>{{ arg.timeText }}</b>
-                    <i>{{ arg.event.title }}</i>
-                    <br>
-                    <button @click="editEvent(arg.event)">Edit</button>
-                    <button @click="deleteEvent(arg.event)">Delete</button>
-                </template>
-
-            </FullCalendar>
+                class="demo-app-calendar"
+                :options="calendarOptions"
+                :events="events"
+                ref="calendarRef"
+            />
         </div>
+        <EventModal :show="showModal" :date="selectedDate" @close="showModal=false" @event-added="addEvent" />
+        <EventModalDetails
+            :show="showEventDetailsModal"
+            :event="selectedEvent"
+            @close="closeEventDetailsModal"
+            @edit="editEvent"
+            @delete="deleteEvent"
+        />
+        <EventModalUpdate
+            :key="selectedEvent ? selectedEvent.id : null"
+            :eventToEdit="selectedEvent"
+            :showEditModal="showEditModal"
+            @close-edit-modal="showEditModal = false"
+            @event-updated="handleEventUpdated"
+            @eventDeleted="handleEventDeleted"
+        />
+
     </div>
 </template>
 
 <script>
-import { defineComponent } from 'vue'
+import { defineComponent, ref } from 'vue'
 import FullCalendar from '@fullcalendar/vue3'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
+import frLocale from '@fullcalendar/core/locales/fr.js'
+
+import axios from 'axios';
 import { INITIAL_EVENTS, createEventId } from '../events-utils.js'
+import EventModal from "@/Components/EventModal.vue";
+import EventModalDetails from "@/Components/EventModalDetails.vue";
+import EventModalUpdate from "@/Components/EventModalUpdate.vue";
+import DateRangePicker from './DateRangePicker.vue';
 
 
 export default defineComponent({
     components: {
-        FullCalendar,
+        DateRangePicker,
+        EventModalUpdate,
+        EventModalDetails,
+        EventModal,
+        FullCalendar
     },
+    props: {
+        initialEvents: Array
+    },
+    computed: {
+        displayedEvents() {
+            if (this.showAllEvents) {
+                return this.currentEvents;
+            } else {
+                return this.currentEvents.slice(0, 7);
+            }
+        }
+    },
+
+    mounted() {
+        if (!this.events.length) { // Si "events" est vide, récupérez les données
+            this.fetchEvents();
+        }
+    },
+    methods: {
+        fetchEvents() {
+            axios.get('/events').then(response => {
+                this.events = this.eventsToFullCalendar(response.data.events);
+
+                // Forcez FullCalendar à re-render
+                const calendarApi = this.$refs.calendarRef.getApi();
+                calendarApi.removeAllEvents();
+                this.events.forEach(event => {
+                    calendarApi.addEvent(event);
+                });
+            });
+        },
+
+        createEvent(eventData) {
+            axios.post('/events', eventData)
+                .then(response => {
+                    // Rafraîchir la page actuelle
+                    window.location.reload();
+                });
+        },
+
+
+        handleEvents(events) {
+            this.currentEvents = events;
+        },
+        handleDateSelect(selectInfo) {
+            this.showModal = true;
+            this.selectedDate = selectInfo.startStr;
+        },
+        addEvent(event) {
+            this.calendarOptions.initialEvents.push(event);
+        },
+        eventsToFullCalendar(events) {
+            if (!events) return []; // Ajouté pour gérer les valeurs null ou undefined
+            return events && Array.isArray(events) ? events.map(event => ({id: event.id, title: event.title, description: event.description, start: event.date })) : [];
+        },
+        //Event Details
+        handleEventClick(info) {
+            this.selectedEvent = {
+                id: info.event.id,
+                title: info.event.title,
+                description: info.event.extendedProps.description
+            };
+            this.showEventDetailsModal = true;
+        },
+        closeEventDetailsModal() {
+            this.showEventDetailsModal = false;
+        },
+        editEvent(event) {
+            console.log("editEvent is called with event:", event);
+            this.selectedEvent = event; // Assignez l'événement sélectionné
+            this.showEditModal = true; // Ouvrez EventModalUpdate
+            this.showEventDetailsModal = false; // Fermez EventModalDetails
+        },
+
+        deleteEvent() {
+            // La logique pour supprimer l'événement
+            this.closeEventDetailsModal();
+        },
+        //
+        handleEventUpdated(updatedEvent) {
+            // Trouvez l'index de l'événement mis à jour dans la liste des événements
+            const index = this.events.findIndex(event => event.id === updatedEvent.id);
+
+            // Mettez à jour l'événement dans la liste
+            if (index !== -1) {
+                this.events[index] = updatedEvent;
+            }
+
+            // Mettez également à jour l'affichage de FullCalendar
+            const calendarApi = this.$refs.calendarRef.getApi();
+            const event = calendarApi.getEventById(updatedEvent.id);
+            if (event) {
+                event.setProp('title', updatedEvent.title);
+                event.setExtendedProp('description', updatedEvent.description);
+            }
+        },
+        //
+        handleEventDeleted(eventId) {
+            // Retirez l'événement de la liste des événements (ou de l'état de votre application)
+            this.events = this.events.filter(event => event.id !== eventId);
+        },
+        //
+        filterEventsByDate([startDate, endDate]) {
+            // Utilisez axios ou votre moyen préféré pour récupérer les événements
+            // par exemple:
+            axios.get('/events', {
+                params: {
+                    start_date: startDate,
+                    end_date: endDate
+                }
+            })
+                .then(response => {
+                    this.events = response.data;
+                });
+        }
+
+
+        },
     data() {
         return {
+            events: [],
+            locales: [ frLocale ],
+            locale: 'fr',
+            //
+            showEditModal: false,
+            //
+            showEventDetailsModal: false,
+            selectedEvent: null,
+            //
+            showModal: false,
+            selectedDate: null,
+            //
+            showAllEvents: false,
             calendarOptions: {
-                plugins: [
-                    dayGridPlugin,
-                    timeGridPlugin,
-                    interactionPlugin // needed for dateClick
-                ],
-                local: 'fr-FR',
+
+                initialEvents: this.events,
+                events: this.events,
+                plugins: [ dayGridPlugin, timeGridPlugin, interactionPlugin ],
                 headerToolbar: {
                     left: 'prev, today ,next',
                     center: 'title',
-                    right: 'dayGridMonth, timeGridWeek, timeGridDay',
-
+                    right: 'dayGridMonth, timeGridWeek, timeGridDay'
                 },
-                buttonText : {
+                buttonText: {
                     today: 'Aujourd\'hui',
-                        month: 'Mois',
-                        week : 'Semaine',
-                        day : 'Jour',
-                        list : 'Liste'
-
+                    month: 'Mois',
+                    week: 'Semaine',
+                    day: 'Jour',
+                    list: 'Liste'
                 },
-
-        initialView: 'dayGridMonth',
-                initialEvents: INITIAL_EVENTS, // alternatively, use the `events` setting to fetch from a feed
+                initialView: 'dayGridMonth',
+                //initialEvents: INITIAL_EVENTS,
                 editable: true,
                 selectable: true,
                 selectMirror: true,
@@ -95,68 +236,14 @@ export default defineComponent({
                 select: this.handleDateSelect,
                 eventClick: this.handleEventClick,
                 eventsSet: this.handleEvents
-                /* you can update a remote database when these fire:
-                eventAdd:
-                eventChange:
-                eventRemove:
-                */
             },
-            currentEvents: [],
+            currentEvents: []
         }
-    },
-    methods: {
-        handleWeekendsToggle() {
-            this.calendarOptions.weekends = !this.calendarOptions.weekends // update a property
-        },
-        handleDateSelect(selectInfo) {
-            let title = prompt('Please enter a new title for your event')
-            let calendarApi = selectInfo.view.calendar
-
-            calendarApi.unselect() // clear date selection
-
-            if (title) {
-                calendarApi.addEvent({
-                    id: createEventId(),
-                    title,
-                    start: selectInfo.startStr,
-                    end: selectInfo.endStr,
-                    allDay: selectInfo.allDay
-                })
-            }
-        },
-        // Méthode pour éditer un événement
-        editEvent(event) {
-            const newTitle = prompt('Modifiez le titre de l\'événement', event.title)
-            if (newTitle) {
-                event.title = newTitle
-            }
-        },
-
-        // Méthode pour supprimer un événement
-        /*deleteEvent(event) {
-            if (confirm(`Êtes-vous sûr de vouloir supprimer l'événement "${event.title}"`)) {
-                const index = this.calendarOptions.events.indexOf(event)
-                if (index !== -1) {
-                    this.calendarOptions.events.splice(index, 1)
-                }
-            }
-        }, */
-
-        handleEventClick(clickInfo) {
-            if (confirm(`Are you sure you want to delete the event '${clickInfo.event.title}'`)) {
-                clickInfo.event.remove()
-            }
-        },
-        handleEvents(events) {
-            this.currentEvents = events
-        },
-    },
+    }
 })
-
 </script>
 
-<style lang='css'>
-
+<style lang="css">
 .event-modal {
     position: absolute;
     background-color: #fff;
@@ -164,11 +251,10 @@ export default defineComponent({
     padding: 10px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     border-radius: 4px;
-    z-index: 1000; /* Ajustez la valeur du z-index selon vos besoins */
+    z-index: 1000;
 }
 
-
-h2 {
+.header {
     margin: 0;
     font-size: 16px;
 }
@@ -180,10 +266,9 @@ ul {
 
 li {
     margin: 1.5em 0;
-    padding: 0;
 }
 
-b { /* used for event dates/times */
+b {
     margin-right: 3px;
 }
 
@@ -210,9 +295,8 @@ b { /* used for event dates/times */
     padding: 3em;
 }
 
-.fc { /* the calendar root */
+.fc {
     max-width: 1100px;
     margin: 0 auto;
 }
-
 </style>
