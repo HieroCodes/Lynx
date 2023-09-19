@@ -8,6 +8,7 @@ export default defineConfig({
             input: 'resources/js/app.js',
             refresh: true,
         }),
+
         vue({
             template: {
                 transformAssetUrls: {
@@ -18,3 +19,4 @@ export default defineConfig({
         }),
     ],
 });
+

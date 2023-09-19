@@ -2,8 +2,8 @@
 
 <template>
     <div class="flex-container">
-        <p class="titre">Trier les évènements par:</p>
-        <DateRangePicker @dateRangeSelected="filterEventsByDate" />
+        <p class="titre">Trier les évènements:</p>
+        <DateRange @dateRangeSelected="filterEventsByDate" />
     </div>
     <div>
         <table>
@@ -40,10 +40,12 @@
 <script>
 
 import DateRangePicker from "@/Components/DateRangePicker.vue";
+import DateRange from "@/Components/DateRange.vue";
 import axios from "axios";
 export default {
     components:{
-        DateRangePicker
+        DateRangePicker,
+        DateRange
     },
     mounted() {
         this.fetchAllEvents();
